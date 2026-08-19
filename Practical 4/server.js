@@ -1,12 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const Task = require('./models/Task');
+const cors = require('cors');
+const authRoutes = require('./routes/auth');
+const taskRoutes = require('./routes/tasks');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(express.json());
+app.use(cors({ origin: 'http://localhost:5173' }));
 
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -35,70 +38,8 @@ function validateTaskId(req, res, next) {
   next();
 }
 
-app.use('/tasks/:id', validateTaskId);
-
-app.get('/tasks', async (req, res, next) => {
-  try {
-    const tasks = await Task.find().sort({ createdAt: -1 });
-    res.json(tasks);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get('/tasks/:id', async (req, res, next) => {
-  try {
-    const task = await Task.findById(req.params.id);
-
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    res.json(task);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post('/tasks', async (req, res, next) => {
-  try {
-    const task = await Task.create(req.body);
-    res.status(201).json(task);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.put('/tasks/:id', async (req, res, next) => {
-  try {
-    const task = await Task.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    res.json(task);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.delete('/tasks/:id', async (req, res, next) => {
-  try {
-    const task = await Task.findByIdAndDelete(req.params.id);
-
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    res.json({ message: 'Task deleted successfully', task });
-  } catch (error) {
-    next(error);
-  }
-});
+app.use('/', authRoutes);
+app.use('/tasks', taskRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
