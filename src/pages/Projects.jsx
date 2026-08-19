@@ -1,84 +1,151 @@
-import React, { useEffect, useState } from 'react';
-import Spinner from '../components/Spinner';
-import ErrorMessage from '../components/ErrorMessage';
-
-// Replace this with your GitHub username to show your repos
-const GITHUB_USERNAME = 'Abhi-1100';
+import { useEffect, useState } from 'react';
+import { clearAuthToken, createTask, deleteTask, getAuthToken, getTasks, updateTask } from '../api';
+import AuthForm from '../components/AuthForm';
+import ConfirmDialog from '../components/ConfirmDialog';
+import TaskForm from '../components/TaskForm';
+import TaskList from '../components/TaskList';
+import Toast from '../components/Toast';
 
 function Projects() {
-  const [repos, setRepos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [query, setQuery] = useState('');
+  const [tasks, setTasks] = useState([]);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialError, setInitialError] = useState(null);
+  const [writeState, setWriteState] = useState({ action: null, id: null });
+  const [toast, setToast] = useState(null);
+  const [taskToDelete, setTaskToDelete] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(getAuthToken()));
 
-  const fetchRepos = async () => {
-    setLoading(true);
-    setError(null);
+  const notify = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  const fetchTasks = async () => {
+    setInitialLoading(true);
+    setInitialError(null);
     try {
-      const res = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}/repos`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      // Ensure we have an array (GitHub returns array on success)
-      setRepos(Array.isArray(data) ? data : []);
+      setTasks(await getTasks());
     } catch (err) {
-      setError(err.message || 'Failed to fetch repositories');
+      setInitialError(err.message);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRepos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (isAuthenticated) {
+      fetchTasks();
+    } else {
+      setInitialLoading(false);
+    }
+  }, [isAuthenticated]);
 
-  const filtered = repos.filter((r) => r.name.toLowerCase().includes(query.toLowerCase()));
+  const handleCreate = async (taskInput) => {
+    const tempId = `temp-${Date.now()}`;
+    const optimisticTask = { _id: tempId, ...taskInput, completed: false };
+    setTasks((current) => [...current, optimisticTask]);
+    setWriteState({ action: 'create', id: tempId });
+
+    try {
+      const savedTask = await createTask(taskInput);
+      setTasks((current) => current.map((task) => (
+        task._id === tempId ? savedTask : task
+      )));
+      notify('Task created successfully.');
+    } catch (err) {
+      setTasks((current) => current.filter((task) => task._id !== tempId));
+      notify(err.message, 'error');
+    } finally {
+      setWriteState({ action: null, id: null });
+    }
+  };
+
+  const handleToggle = async (task) => {
+    const previousTasks = tasks;
+    const nextCompleted = !task.completed;
+    setTasks((current) => current.map((item) => (
+      item._id === task._id ? { ...item, completed: nextCompleted } : item
+    )));
+    setWriteState({ action: 'update', id: task._id });
+
+    try {
+      const savedTask = await updateTask(task._id, { completed: nextCompleted });
+      setTasks((current) => current.map((item) => (
+        item._id === task._id ? savedTask : item
+      )));
+      notify('Task updated successfully.');
+    } catch (err) {
+      setTasks(previousTasks);
+      notify(err.message, 'error');
+    } finally {
+      setWriteState({ action: null, id: null });
+    }
+  };
+
+  const handleDelete = async () => {
+    const taskId = taskToDelete._id;
+    setWriteState({ action: 'delete', id: taskId });
+
+    try {
+      await deleteTask(taskId);
+      setTasks((current) => current.filter((task) => task._id !== taskId));
+      notify('Task deleted successfully.');
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      setWriteState({ action: null, id: null });
+      setTaskToDelete(null);
+    }
+  };
 
   return (
-    <section className="projects-page">
+    <section className="projects-page task-manager">
       <div className="section-header">
         <div>
-          <p className="section-label">Projects</p>
-          <h1>Selected Work</h1>
+          <p className="section-label">Practical 7</p>
+          <h1>{isAuthenticated ? 'Task Manager' : 'Secure Task Manager'}</h1>
         </div>
         <p className="section-description">
-          A dynamic list of GitHub repositories fetched from the public API.
+          Create, complete, and clear tasks backed by Express, MongoDB, and Mongoose.
         </p>
       </div>
 
-      {loading && <Spinner />}
-      {error && <ErrorMessage message={error} onRetry={fetchRepos} />}
+      {!isAuthenticated && <AuthForm onAuthenticated={() => setIsAuthenticated(true)} />}
 
-      {!loading && !error && (
-        <div>
-          <div style={{ margin: '1rem 0' }}>
-            <input
-              aria-label="Search repositories"
-              placeholder="Search repositories by name"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              style={{ padding: '0.5rem', width: '100%', maxWidth: 480 }}
+      {isAuthenticated && (
+        <>
+          <div className="task-toolbar">
+            <span>Signed in securely</span>
+            <button type="button" onClick={() => { clearAuthToken(); setTasks([]); setIsAuthenticated(false); }}>Log out</button>
+          </div>
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+          <TaskForm onCreate={handleCreate} isSubmitting={writeState.action === 'create'} />
+
+          {initialLoading && <p className="task-status">Loading tasks...</p>}
+          {initialError && (
+            <div className="task-error" role="alert">
+              <strong>Could not load tasks.</strong>
+              <span>{initialError}</span>
+              <button type="button" onClick={fetchTasks}>Retry</button>
+            </div>
+          )}
+          {!initialLoading && !initialError && (
+            <TaskList
+              tasks={tasks}
+              onToggle={handleToggle}
+              onDelete={setTaskToDelete}
+              busyTaskId={writeState.id}
             />
-          </div>
+          )}
 
-          <div className="project-grid">
-            {filtered.length === 0 ? (
-              <p>No repositories found.</p>
-            ) : (
-              filtered.map((repo) => (
-                <article key={repo.id} className="project-card">
-                  <h2>
-                    <a href={repo.html_url} target="_blank" rel="noreferrer">
-                      {repo.name}
-                    </a>
-                  </h2>
-                  <p>{repo.description}</p>
-                  <p>⭐ {repo.stargazers_count ?? 0}</p>
-                </article>
-              ))
-            )}
-          </div>
-        </div>
+          {taskToDelete && (
+            <ConfirmDialog
+              task={taskToDelete}
+              isDeleting={writeState.action === 'delete'}
+              onConfirm={handleDelete}
+              onCancel={() => setTaskToDelete(null)}
+            />
+          )}
+        </>
       )}
     </section>
   );
