@@ -1,11 +1,10 @@
+require('dotenv').config();
 const express = require('express');
+const mongoose = require('mongoose');
+const Task = require('./models/Task');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-let tasks = [
-  { id: 1, title: 'Learn Express', description: 'Build a REST API', completed: false },
-  { id: 2, title: 'Write README', description: 'Document the API endpoints', completed: true }
-];
 
 app.use(express.json());
 
@@ -27,9 +26,9 @@ app.use((req, res, next) => {
 function validateTaskId(req, res, next) {
   const { id } = req.params;
 
-  if (!/^\d+$/.test(id)) {
-    const error = new Error('Task ID must be a numeric value');
-    error.status = 400;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    const error = new Error('Task not found');
+    error.status = 404;
     return next(error);
   }
 
@@ -38,71 +37,64 @@ function validateTaskId(req, res, next) {
 
 app.use('/tasks/:id', validateTaskId);
 
-app.get('/tasks', (req, res) => {
-  res.json(tasks);
+app.get('/tasks', async (req, res, next) => {
+  try {
+    const tasks = await Task.find().sort({ createdAt: -1 });
+    res.json(tasks);
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.post('/tasks', (req, res, next) => {
+app.get('/tasks/:id', async (req, res, next) => {
   try {
-    const { title, description = '', completed = false } = req.body || {};
+    const task = await Task.findById(req.params.id);
 
-    if (!title || typeof title !== 'string' || title.trim() === '') {
-      const error = new Error('Task title is required');
-      error.status = 400;
-      return next(error);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
     }
 
-    const task = {
-      id: Date.now(),
-      title: title.trim(),
-      description,
-      completed
-    };
+    res.json(task);
+  } catch (error) {
+    next(error);
+  }
+});
 
-    tasks.push(task);
+app.post('/tasks', async (req, res, next) => {
+  try {
+    const task = await Task.create(req.body);
     res.status(201).json(task);
   } catch (error) {
     next(error);
   }
 });
 
-app.put('/tasks/:id', (req, res, next) => {
+app.put('/tasks/:id', async (req, res, next) => {
   try {
-    const taskId = Number(req.params.id);
-    const taskIndex = tasks.findIndex(task => task.id === taskId);
+    const task = await Task.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true
+    });
 
-    if (taskIndex === -1) {
-      const error = new Error('Task not found');
-      error.status = 404;
-      return next(error);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
     }
 
-    const updatedTask = {
-      ...tasks[taskIndex],
-      ...req.body,
-      id: taskId
-    };
-
-    tasks[taskIndex] = updatedTask;
-    res.json(updatedTask);
+    res.json(task);
   } catch (error) {
     next(error);
   }
 });
 
-app.delete('/tasks/:id', (req, res, next) => {
+app.delete('/tasks/:id', async (req, res, next) => {
   try {
-    const taskId = Number(req.params.id);
-    const taskIndex = tasks.findIndex(task => task.id === taskId);
+    const task = await Task.findByIdAndDelete(req.params.id);
 
-    if (taskIndex === -1) {
-      const error = new Error('Task not found');
-      error.status = 404;
-      return next(error);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
     }
 
-    const deletedTask = tasks.splice(taskIndex, 1)[0];
-    res.json({ message: 'Task deleted successfully', task: deletedTask });
+    res.json({ message: 'Task deleted successfully', task });
   } catch (error) {
     next(error);
   }
@@ -116,12 +108,44 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  if (err.name === 'ValidationError') {
+    const errors = Object.values(err.errors).map((error) => {
+      if (error.kind === 'required') {
+        return `${error.path} is required`;
+      }
+
+      if (error.kind === 'enum') {
+        return `${error.path} must be one of: ${error.enumValues.join(', ')}`;
+      }
+
+      return error.message;
+    });
+
+    return res.status(400).json({ success: false, errors });
+  }
+
+  if (err.status === 404) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+
   console.error(err.stack);
   res.status(err.status || 500).json({
-    error: err.message || 'Something went wrong'
+    success: false,
+    error: 'Something went wrong'
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log('MongoDB connection status: connected');
+    console.log('MongoDB connected successfully');
+    app.listen(PORT, () => {
+      console.log(`Server port: ${PORT}`);
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.log('MongoDB connection status: failed');
+    console.error('MongoDB connection failed:', error.message);
+    process.exit(1);
+  });

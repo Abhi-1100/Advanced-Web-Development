@@ -1,0 +1,166 @@
+{
+  "info": {
+    "name": "Task Management API Tests",
+    "description": "Postman collection for validating Task API endpoints using Express and Mongoose.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "taskId",
+      "value": "REPLACE_WITH_ID",
+      "type": "string"
+    },
+    {
+      "key": "taskIdInvalid",
+      "value": "000000000000000000000000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "POST /tasks - valid data",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Test Task\",\n  \"description\": \"A task created from Postman to verify endpoint behavior.\",\n  \"completed\": false,\n  \"priority\": \"high\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tasks",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tasks"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /tasks - missing title",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"description\": \"Missing the required title field to trigger validation.\",\n  \"completed\": false,\n  \"priority\": \"medium\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tasks",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tasks"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /tasks",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/tasks",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tasks"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /tasks/:id - valid id",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tasks", 
+            "{{taskId}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /tasks/:id - invalid/nonexistent id",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskIdInvalid}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tasks", 
+            "{{taskIdInvalid}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "PUT /tasks/:id - valid update",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Updated Test Task\",\n  \"description\": \"Updated description.\",\n  \"completed\": true,\n  \"priority\": \"medium\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tasks", 
+            "{{taskId}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "DELETE /tasks/:id",
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/tasks/{{taskId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "tasks", 
+            "{{taskId}}"
+          ]
+        }
+      }
+    }
+  ]
+}
