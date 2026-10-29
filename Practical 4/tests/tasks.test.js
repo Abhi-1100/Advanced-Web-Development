@@ -27,7 +27,7 @@ test('GET /tasks returns an empty task list', async () => {
     .get('/tasks')
     .set('Authorization', authHeader());
 
-  expect(res.statusCode).toBe(404);
+  expect(res.statusCode).toBe(200);
   expect(res.body).toEqual([]);
 });
 
